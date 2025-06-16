@@ -45,7 +45,6 @@ const AddressAutocomplete = () => {
         `format=json` +
         `&q=${encodeURIComponent(searchQuery)}` +
         `&limit=10` +
-        `&countrycodes=in` +
         `&addressdetails=1` +
         `&extratags=1` +
         `&dedupe=1` +
@@ -53,7 +52,7 @@ const AddressAutocomplete = () => {
         {
           headers: {
             'User-Agent': 'AddressAutocomplete/1.0',
-            'Accept-Language': 'en'
+            'Accept-Language': navigator.language || 'en'
           }
         }
       );
@@ -67,22 +66,35 @@ const AddressAutocomplete = () => {
       if (data?.length > 0) {
         const formattedSuggestions = data.map((item, index) => {
           const address = item.address || {};
+          
+          // Build address parts in a logical order
           const parts = [];
           
+          // Street-level details
           if (address.house_number) parts.push(address.house_number);
           if (address.road) parts.push(address.road);
+          
+          // Local area details
           if (address.neighbourhood) parts.push(address.neighbourhood);
           if (address.suburb) parts.push(address.suburb);
           if (address.city_district) parts.push(address.city_district);
+          
+          // City/town/village
           if (address.city || address.town || address.village) {
             parts.push(address.city || address.town || address.village);
           }
+          
+          // Region/state details
           if (address.state_district && address.state_district !== (address.city || address.town)) {
             parts.push(address.state_district);
           }
           if (address.state) parts.push(address.state);
-          if (address.postcode) parts.push(`PIN: ${address.postcode}`);
           
+          // Country and postal code
+          if (address.country) parts.push(address.country);
+          if (address.postcode) parts.push(address.postcode);
+          
+          // Fallback to display_name if no address parts were found
           const cleanDisplayName = parts.length > 0 ? parts.join(', ') : item.display_name;
           
           return {
@@ -103,25 +115,17 @@ const AddressAutocomplete = () => {
               city: address.city || address.town || address.village,
               state_district: address.state_district,
               state: address.state,
-              country: address.country || 'India',
+              country: address.country,
+              country_code: address.country_code,
               postcode: address.postcode
             }
           };
         });
         
-        const sortedSuggestions = formattedSuggestions.sort((a, b) => {
-          const queryLower = searchQuery.toLowerCase();
-          const aCity = (a.address.city || '').toLowerCase();
-          const bCity = (b.address.city || '').toLowerCase();
-          
-          if (aCity.includes(queryLower)) {
-            return -1;
-          }
-          if (bCity.includes(queryLower)) {
-            return 1;
-          }
-          return (b.importance || 0) - (a.importance || 0);
-        });
+        // Sort by importance (higher importance first)
+        const sortedSuggestions = formattedSuggestions.sort((a, b) => 
+          (b.importance || 0) - (a.importance || 0)
+        );
         
         setSuggestions(sortedSuggestions);
         setShowSuggestions(true);
@@ -161,7 +165,8 @@ const AddressAutocomplete = () => {
     const initializeMap = () => {
       if (mapRef.current && !mapInstanceRef.current && window.L) {
         try {
-          const map = window.L.map(mapRef.current).setView([28.6139, 77.2090], 10);
+          // Default to world view
+          const map = window.L.map(mapRef.current).setView([20, 0], 2);
           
           window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors',
@@ -216,7 +221,7 @@ const AddressAutocomplete = () => {
         const marker = window.L.marker([selectedLocation.lat, selectedLocation.lon]).addTo(map);
         marker.bindPopup(`
           <div style="max-width: 200px;">
-            <strong>${selectedLocation.address.city || 'Location'}</strong><br>
+            <strong>${selectedLocation.address.city || selectedLocation.address.country || 'Location'}</strong><br>
             <small>${selectedLocation.clean_display_name}</small>
           </div>
         `).openPopup();
@@ -286,8 +291,8 @@ const AddressAutocomplete = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-6 md:mb-8">
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2">Address Finder</h1>
-          <p className="text-gray-600 text-sm md:text-base">Search for any location in India and view it on the map</p>
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2">Global Address Finder</h1>
+          <p className="text-gray-600 text-sm md:text-base">Search for any location worldwide and view it on the map</p>
         </div>
 
         <div className="bg-white rounded-xl md:rounded-2xl shadow-lg md:shadow-xl p-4 md:p-6 mb-6">
@@ -299,7 +304,7 @@ const AddressAutocomplete = () => {
                 value={query}
                 onChange={handleInputChange}
                 onFocus={handleInputFocus}
-                placeholder="Enter location name, PIN code, or landmark"
+                placeholder="Enter location name, postal code, or landmark"
                 className="w-full px-4 py-3 pl-12 pr-10 text-base md:text-lg border-2 border-gray-300 rounded-lg md:rounded-xl focus:border-blue-500 focus:outline-none transition-colors focus:ring-2 focus:ring-blue-200 font-medium text-gray-800"
               />
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5" />
@@ -316,8 +321,8 @@ const AddressAutocomplete = () => {
                 </button>
               )}
             </div>
-{/* 
-            {error && (
+
+            {/* {error && (
               <div className="mt-2 p-2 md:p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
                 <span className="text-red-700 text-xs md:text-sm">{error}</span>
@@ -344,9 +349,10 @@ const AddressAutocomplete = () => {
                         <div className="font-medium text-gray-800 text-sm leading-tight">
                           {suggestion.clean_display_name}
                         </div>
-                        {suggestion.address.postcode && (
-                          <div className="text-xs text-green-600 mt-1">
-                            PIN: {suggestion.address.postcode}
+                        {suggestion.address.country && (
+                          <div className="text-xs text-gray-600 mt-1">
+                            {suggestion.address.country}
+                            {suggestion.address.postcode && ` • ${suggestion.address.postcode}`}
                           </div>
                         )}
                         <div className="text-xs text-blue-600 mt-1 flex items-center gap-2">
@@ -375,16 +381,19 @@ const AddressAutocomplete = () => {
                 <div className="space-y-1 text-xs md:text-sm">
                   <p className="text-gray-800 font-medium">{selectedLocation.clean_display_name}</p>
                   {selectedLocation.address.road && (
-                    <p className="text-gray-600">Road: {selectedLocation.address.road}</p>
+                    <p className="text-gray-600">Street: {selectedLocation.address.road}</p>
                   )}
                   {selectedLocation.address.city && (
-                    <p className="text-gray-600">City: {selectedLocation.address.city}</p>
+                    <p className="text-gray-600">City/Town: {selectedLocation.address.city}</p>
                   )}
                   {selectedLocation.address.state && (
-                    <p className="text-gray-600">State: {selectedLocation.address.state}</p>
+                    <p className="text-gray-600">State/Region: {selectedLocation.address.state}</p>
+                  )}
+                  {selectedLocation.address.country && (
+                    <p className="text-gray-600">Country: {selectedLocation.address.country}</p>
                   )}
                   {selectedLocation.address.postcode && (
-                    <p className="text-green-600 font-medium">PIN: {selectedLocation.address.postcode}</p>
+                    <p className="text-green-600 font-medium">Postal Code: {selectedLocation.address.postcode}</p>
                   )}
                 </div>
               </div>
@@ -396,6 +405,9 @@ const AddressAutocomplete = () => {
                   <p className="text-gray-600">Type: <span className="capitalize">{selectedLocation.type}</span></p>
                   {selectedLocation.class && (
                     <p className="text-gray-600">Category: <span className="capitalize">{selectedLocation.class}</span></p>
+                  )}
+                  {selectedLocation.address.country_code && (
+                    <p className="text-gray-600">Country Code: {selectedLocation.address.country_code.toUpperCase()}</p>
                   )}
                 </div>
               </div>
@@ -415,10 +427,10 @@ const AddressAutocomplete = () => {
         </div>
 
         <div className="mt-4 md:mt-6 bg-blue-50 rounded-lg md:rounded-xl p-3 md:p-4">
-          <h3 className="font-semibold text-blue-800 mb-1 md:mb-2 text-sm md:text-base">How to use:</h3>
+          <h3 className="font-semibold text-blue-800 mb-1 md:mb-2 text-sm md:text-base">Search Tips:</h3>
           <ul className="text-blue-700 space-y-1 text-xs md:text-sm">
-            <li>• Include area names, PIN codes, or landmarks for precise search</li>
-            <li>• Click anywhere outside the dropdown to close it</li>
+            <li>• Include city names, postal codes, or landmarks for better results</li>
+            <li>• For international addresses, include the country name</li>
             <li>• Results are sorted by relevance and location importance</li>
           </ul>
         </div>
