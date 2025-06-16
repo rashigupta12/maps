@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { MapPin, Search, Loader, AlertCircle } from 'lucide-react';
 
 const AddressAutocomplete = () => {
@@ -15,8 +15,8 @@ const AddressAutocomplete = () => {
   const inputRef = useRef(null);
   const suggestionsRef = useRef(null);
 
-  // Debounce function to limit API calls
-  const debounce = (func, wait) => {
+  // Memoized debounce function to limit API calls
+  const debounce = useCallback((func, wait) => {
     let timeout;
     return function executedFunction(...args) {
       const later = () => {
@@ -26,10 +26,10 @@ const AddressAutocomplete = () => {
       clearTimeout(timeout);
       timeout = setTimeout(later, wait);
     };
-  };
+  }, []);
 
-  // Search for addresses using Nominatim API with better parameters
-  const searchAddresses = async (searchQuery) => {
+  // Memoized search function
+  const searchAddresses = useCallback(async (searchQuery) => {
     if (searchQuery.length < 2) {
       setSuggestions([]);
       setShowSuggestions(false);
@@ -40,9 +40,6 @@ const AddressAutocomplete = () => {
     setError('');
     
     try {
-      console.log('Searching for:', searchQuery);
-      
-      // Enhanced search with better parameters for Indian locations
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?` + 
         `format=json` +
@@ -66,16 +63,12 @@ const AddressAutocomplete = () => {
       }
       
       const data = await response.json();
-      console.log('API Response:', data);
       
-      if (data && data.length > 0) {
+      if (data?.length > 0) {
         const formattedSuggestions = data.map((item, index) => {
           const address = item.address || {};
-          
-          // Build a cleaner display name
           const parts = [];
           
-          // Add specific location details
           if (address.house_number) parts.push(address.house_number);
           if (address.road) parts.push(address.road);
           if (address.neighbourhood) parts.push(address.neighbourhood);
@@ -116,23 +109,22 @@ const AddressAutocomplete = () => {
           };
         });
         
-        // Sort by importance and relevance
         const sortedSuggestions = formattedSuggestions.sort((a, b) => {
-          // Prioritize exact matches in city names
           const queryLower = searchQuery.toLowerCase();
           const aCity = (a.address.city || '').toLowerCase();
           const bCity = (b.address.city || '').toLowerCase();
           
-          if (aCity.includes(queryLower) && !bCity.includes(queryLower)) return -1;
-          if (!aCity.includes(queryLower) && bCity.includes(queryLower)) return 1;
-          
-          // Then sort by importance
+          if (aCity.includes(queryLower)) {
+            return -1;
+          }
+          if (bCity.includes(queryLower)) {
+            return 1;
+          }
           return (b.importance || 0) - (a.importance || 0);
         });
         
         setSuggestions(sortedSuggestions);
         setShowSuggestions(true);
-        console.log('Formatted suggestions:', sortedSuggestions);
       } else {
         setSuggestions([]);
         setShowSuggestions(false);
@@ -146,9 +138,13 @@ const AddressAutocomplete = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const debouncedSearch = debounce(searchAddresses, 300);
+  // Memoized debounced search function
+  const debouncedSearch = useCallback(
+    debounce((searchQuery) => searchAddresses(searchQuery), 400),
+    [debounce, searchAddresses]
+  );
 
   useEffect(() => {
     if (query.trim()) {
@@ -158,7 +154,7 @@ const AddressAutocomplete = () => {
       setShowSuggestions(false);
       setError('');
     }
-  }, [query]);
+  }, [query, debouncedSearch]);
 
   // Initialize map when component mounts
   useEffect(() => {
@@ -173,25 +169,38 @@ const AddressAutocomplete = () => {
           }).addTo(map);
           
           mapInstanceRef.current = map;
-          console.log('Map initialized successfully');
         } catch (error) {
           console.error('Error initializing map:', error);
         }
       }
     };
 
-    if (window.L) {
-      initializeMap();
-    } else {
-      const checkLeaflet = setInterval(() => {
-        if (window.L) {
-          clearInterval(checkLeaflet);
-          initializeMap();
-        }
-      }, 100);
-      
-      setTimeout(() => clearInterval(checkLeaflet), 10000);
-    }
+    const loadLeaflet = () => {
+      if (window.L) {
+        initializeMap();
+      } else {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js';
+        script.async = true;
+        script.onload = initializeMap;
+        script.onerror = () => console.error('Failed to load Leaflet script');
+        document.head.appendChild(script);
+
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css';
+        document.head.appendChild(link);
+      }
+    };
+
+    loadLeaflet();
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
   }, []);
 
   // Update map when location is selected
@@ -214,21 +223,20 @@ const AddressAutocomplete = () => {
         markerRef.current = marker;
         
         map.setView([selectedLocation.lat, selectedLocation.lon], 15);
-        console.log('Map updated with location:', selectedLocation);
       } catch (error) {
         console.error('Error updating map:', error);
       }
     }
   }, [selectedLocation]);
 
-  const handleSuggestionClick = (suggestion) => {
+  const handleSuggestionClick = useCallback((suggestion) => {
     setQuery(suggestion.clean_display_name);
     setSelectedLocation(suggestion);
     setShowSuggestions(false);
     setError('');
-  };
+  }, []);
 
-  const handleInputChange = (e) => {
+  const handleInputChange = useCallback((e) => {
     const value = e.target.value;
     setQuery(value);
     
@@ -238,13 +246,13 @@ const AddressAutocomplete = () => {
       setShowSuggestions(false);
       setError('');
     }
-  };
+  }, []);
 
-  const handleInputFocus = () => {
+  const handleInputFocus = useCallback(() => {
     if (suggestions.length > 0) {
       setShowSuggestions(true);
     }
-  };
+  }, [suggestions.length]);
 
   // Handle clicks outside to close dropdown
   useEffect(() => {
@@ -265,40 +273,12 @@ const AddressAutocomplete = () => {
     };
   }, []);
 
-  // Test API connection
-  const testAPI = async () => {
-    try {
-      const response = await fetch('https://nominatim.openstreetmap.org/search?format=json&q=Krishna%20Nagar%20Delhi&limit=3&countrycodes=in&addressdetails=1');
-      const data = await response.json();
-      console.log('API Test Result:', data);
-      alert(`API Test ${data.length > 0 ? 'Successful' : 'Failed'}: Found ${data.length} results`);
-    } catch (error) {
-      console.error('API Test Failed:', error);
-      alert(`API Test Failed: ${error.message}`);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      {/* Load Leaflet */}
-      <link 
-        rel="stylesheet" 
-        href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"
-      />
-      <script 
-        src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"
-      ></script>
-
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-800 mb-2">Address Finder</h1>
           <p className="text-gray-600">Search for any location in India and view it on the map</p>
-          {/* <button 
-            onClick={testAPI}
-            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-          >
-            Test API Connection
-          </button> */}
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
@@ -319,7 +299,6 @@ const AddressAutocomplete = () => {
               )}
             </div>
 
-            {/* Error message */}
             {/* {error && (
               <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-red-500" />
@@ -327,7 +306,6 @@ const AddressAutocomplete = () => {
               </div>
             )} */}
 
-            {/* Suggestions dropdown - Fixed positioning and visibility */}
             {showSuggestions && suggestions.length > 0 && (
               <div 
                 ref={suggestionsRef}
@@ -336,7 +314,7 @@ const AddressAutocomplete = () => {
                   boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' 
                 }}
               >
-                {suggestions.map((suggestion, index) => (
+                {suggestions.map((suggestion) => (
                   <div
                     key={suggestion.id}
                     onClick={() => handleSuggestionClick(suggestion)}
@@ -365,15 +343,8 @@ const AddressAutocomplete = () => {
               </div>
             )}
           </div>
-
-          {/* Debug info - Updated */}
-          <div className="mt-2 text-xs text-gray-500 bg-gray-50 p-2 rounded">
-            <div>Query: &quot;{query}&quot; | Results: {suggestions.length} | Showing: {showSuggestions.toString()}</div>
-            {loading && <div className="text-blue-600">🔄 Searching...</div>}
-          </div>
         </div>
 
-        {/* Selected location info - Enhanced */}
         {selectedLocation && (
           <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
             <div className="flex items-center gap-3 mb-4">
@@ -414,7 +385,6 @@ const AddressAutocomplete = () => {
           </div>
         )}
 
-        {/* Map container */}
         <div className="bg-white rounded-2xl shadow-xl p-6">
           <h2 className="text-xl font-semibold text-gray-800 mb-4">Map View</h2>
           <div 
@@ -427,7 +397,6 @@ const AddressAutocomplete = () => {
           </p>
         </div>
 
-        {/* Enhanced Instructions */}
         <div className="mt-6 bg-blue-50 rounded-xl p-4">
           <h3 className="font-semibold text-blue-800 mb-2">How to use:</h3>
           <ul className="text-blue-700 space-y-1 text-sm">
