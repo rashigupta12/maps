@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { MapPin, Search, Loader, AlertCircle } from 'lucide-react';
+import { MapPin, Search, Loader, AlertCircle, X } from 'lucide-react';
 
 const AddressAutocomplete = () => {
   const [query, setQuery] = useState('');
@@ -254,6 +254,15 @@ const AddressAutocomplete = () => {
     }
   }, [suggestions.length]);
 
+  const clearInput = useCallback(() => {
+    setQuery('');
+    setSelectedLocation(null);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setError('');
+    inputRef.current?.focus();
+  }, []);
+
   // Handle clicks outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -274,14 +283,14 @@ const AddressAutocomplete = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">Address Finder</h1>
-          <p className="text-gray-600">Search for any location in India and view it on the map</p>
+        <div className="text-center mb-6 md:mb-8">
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2">Address Finder</h1>
+          <p className="text-gray-600 text-sm md:text-base">Search for any location in India and view it on the map</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+        <div className="bg-white rounded-xl md:rounded-2xl shadow-lg md:shadow-xl p-4 md:p-6 mb-6">
           <div className="relative">
             <div className="relative">
               <input
@@ -291,25 +300,34 @@ const AddressAutocomplete = () => {
                 onChange={handleInputChange}
                 onFocus={handleInputFocus}
                 placeholder="Enter location (e.g., Krishna Nagar Delhi, CP Delhi, Noida...)"
-                className="w-full px-4 py-3 pl-12 pr-12 text-lg border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none transition-colors"
+                className="w-full px-4 py-3 pl-12 pr-10 text-base md:text-lg border-2 border-gray-300 rounded-lg md:rounded-xl focus:border-blue-500 focus:outline-none transition-colors focus:ring-2 focus:ring-blue-200 font-medium text-gray-800"
               />
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5" />
               {loading && (
-                <Loader className="absolute right-4 top-1/2 transform -translate-y-1/2 text-blue-500 w-5 h-5 animate-spin" />
+                <Loader className="absolute right-10 top-1/2 transform -translate-y-1/2 text-blue-500 w-4 h-4 md:w-5 md:h-5 animate-spin" />
+              )}
+              {query && (
+                <button
+                  onClick={clearInput}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  aria-label="Clear search"
+                >
+                  <X className="w-4 h-4 md:w-5 md:h-5" />
+                </button>
               )}
             </div>
-
-            {/* {error && (
-              <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-red-500" />
-                <span className="text-red-700 text-sm">{error}</span>
+{/* 
+            {error && (
+              <div className="mt-2 p-2 md:p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                <span className="text-red-700 text-xs md:text-sm">{error}</span>
               </div>
             )} */}
 
             {showSuggestions && suggestions.length > 0 && (
               <div 
                 ref={suggestionsRef}
-                className="absolute top-full left-0 right-0 bg-white mt-1 rounded-xl shadow-2xl border border-gray-200 z-[1000] max-h-96 overflow-y-auto"
+                className="absolute top-full left-0 right-0 bg-white mt-1 rounded-lg md:rounded-xl shadow-lg md:shadow-2xl border border-gray-200 z-[1000] max-h-80 md:max-h-96 overflow-y-auto"
                 style={{ 
                   boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' 
                 }}
@@ -318,10 +336,10 @@ const AddressAutocomplete = () => {
                   <div
                     key={suggestion.id}
                     onClick={() => handleSuggestionClick(suggestion)}
-                    className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors"
+                    className="px-3 py-2 md:px-4 md:py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors"
                   >
                     <div className="flex items-start gap-3">
-                      <MapPin className="w-5 h-5 text-blue-500 mt-1 flex-shrink-0" />
+                      <MapPin className="w-4 h-4 md:w-5 md:h-5 text-blue-500 mt-0.5 md:mt-1 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-gray-800 text-sm leading-tight">
                           {suggestion.clean_display_name}
@@ -346,15 +364,15 @@ const AddressAutocomplete = () => {
         </div>
 
         {selectedLocation && (
-          <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-            <div className="flex items-center gap-3 mb-4">
-              <MapPin className="w-6 h-6 text-green-500" />
-              <h2 className="text-xl font-semibold text-gray-800">Selected Location</h2>
+          <div className="bg-white rounded-xl md:rounded-2xl shadow-lg md:shadow-xl p-4 md:p-6 mb-6">
+            <div className="flex items-center gap-3 mb-3 md:mb-4">
+              <MapPin className="w-5 h-5 md:w-6 md:h-6 text-green-500" />
+              <h2 className="text-lg md:text-xl font-semibold text-gray-800">Selected Location</h2>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               <div>
-                <h3 className="font-medium text-gray-700 mb-2">Address Details</h3>
-                <div className="space-y-1 text-sm">
+                <h3 className="font-medium text-gray-700 mb-1 md:mb-2 text-sm md:text-base">Address Details</h3>
+                <div className="space-y-1 text-xs md:text-sm">
                   <p className="text-gray-800 font-medium">{selectedLocation.clean_display_name}</p>
                   {selectedLocation.address.road && (
                     <p className="text-gray-600">Road: {selectedLocation.address.road}</p>
@@ -371,8 +389,8 @@ const AddressAutocomplete = () => {
                 </div>
               </div>
               <div>
-                <h3 className="font-medium text-gray-700 mb-2">Coordinates & Info</h3>
-                <div className="space-y-1 text-sm">
+                <h3 className="font-medium text-gray-700 mb-1 md:mb-2 text-sm md:text-base">Coordinates & Info</h3>
+                <div className="space-y-1 text-xs md:text-sm">
                   <p className="text-gray-600">Latitude: {selectedLocation.lat.toFixed(6)}</p>
                   <p className="text-gray-600">Longitude: {selectedLocation.lon.toFixed(6)}</p>
                   <p className="text-gray-600">Type: <span className="capitalize">{selectedLocation.type}</span></p>
@@ -385,21 +403,20 @@ const AddressAutocomplete = () => {
           </div>
         )}
 
-        <div className="bg-white rounded-2xl shadow-xl p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Map View</h2>
+        <div className="bg-white rounded-xl md:rounded-2xl shadow-lg md:shadow-xl p-4 md:p-6">
+          <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-3 md:mb-4">Map View</h2>
           <div 
             ref={mapRef} 
-            className="w-full h-96 rounded-xl border-2 border-gray-200 bg-gray-100"
-            style={{ minHeight: '400px' }}
+            className="w-full h-64 sm:h-80 md:h-96 rounded-lg md:rounded-xl border-2 border-gray-200 bg-gray-100"
           />
-          <p className="text-sm text-gray-500 mt-2">
+          <p className="text-xs md:text-sm text-gray-500 mt-2">
             Powered by OpenStreetMap • Free and open-source mapping
           </p>
         </div>
 
-        <div className="mt-6 bg-blue-50 rounded-xl p-4">
-          <h3 className="font-semibold text-blue-800 mb-2">How to use:</h3>
-          <ul className="text-blue-700 space-y-1 text-sm">
+        <div className="mt-4 md:mt-6 bg-blue-50 rounded-lg md:rounded-xl p-3 md:p-4">
+          <h3 className="font-semibold text-blue-800 mb-1 md:mb-2 text-sm md:text-base">How to use:</h3>
+          <ul className="text-blue-700 space-y-1 text-xs md:text-sm">
             <li>• Include area names, PIN codes, or landmarks for precise search</li>
             <li>• Click anywhere outside the dropdown to close it</li>
             <li>• Results are sorted by relevance and location importance</li>
